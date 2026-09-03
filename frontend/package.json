@@ -45,5 +45,10 @@
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "@tsparticles/engine": true,
+    "core-js": true,
+    "unrs-resolver": true
   }
 }
