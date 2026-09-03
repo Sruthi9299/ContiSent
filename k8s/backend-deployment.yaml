@@ -17,18 +17,17 @@ spec:
       hostPID: true # Required for kube-bench to inspect node processes
       containers:
       - name: contisent-backend
-        # IMPORTANT: You will replace this image with your actual GitHub Container Registry image
-        image: ghcr.io/YOUR_GITHUB_USERNAME/contisent-backend:latest 
-        imagePullPolicy: Always
+        image: contisent-backend:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
         env:
-        - name: DATABASE_URL
+        - name: SQLALCHEMY_DATABASE_URI
           value: "sqlite:///./data/container_security.db"
         - name: SECRET_KEY
           value: "oracle-cloud-super-secret-key-change-me-later"
         - name: ALLOWED_ORIGINS
-          value: "*"
+          value: '["*"]'
         volumeMounts:
         - name: host-etc
           mountPath: /etc
