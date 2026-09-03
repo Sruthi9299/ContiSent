@@ -91,7 +91,7 @@ export default function VulnerabilitiesPage() {
                     <TableHead>Vulnerability ID</TableHead>
                     <TableHead>Package</TableHead>
                     <TableHead>Target</TableHead>
-                    <TableHead>Status/Fix</TableHead>
+                    <TableHead>Remediation Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -111,13 +111,23 @@ export default function VulnerabilitiesPage() {
                       </TableCell>
                       <TableCell>
                         {vuln.fixed_version ? (
-                          <Badge variant="outline" className="border-green-500/30 text-green-500 bg-green-500/5">
-                            Fix: {vuln.fixed_version}
-                          </Badge>
+                          <div className="flex flex-col space-y-1">
+                            <Badge variant="outline" className="w-fit border-green-500/30 text-green-500 bg-green-500/5 mb-1">
+                              Fix Available
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Upgrade <strong className="text-primary">{vuln.pkg_name}</strong> from version {vuln.installed_version} to <strong className="text-green-500">{vuln.fixed_version}</strong>.
+                            </span>
+                          </div>
                         ) : (
-                          <Badge variant="outline" className="border-slate-500/30 text-slate-500 bg-slate-500/5">
-                            No Fix Available
-                          </Badge>
+                          <div className="flex flex-col space-y-1">
+                            <Badge variant="outline" className="w-fit border-slate-500/30 text-slate-500 bg-slate-500/5 mb-1">
+                              No Fix Available
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Wait for maintainers to release a patch, or use an alternative package.
+                            </span>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
