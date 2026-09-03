@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-74ccbdf4
+  namespace: prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-74ccbdf4
+  template:
+    metadata:
+      labels:
+        app: app-74ccbdf4
+    spec:
+      containers:
+      - image: nginx:alpine
+        name: web
+        ports:
+        - containerPort: 80
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-74ccbdf4-svc
+  namespace: prod
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: app-74ccbdf4
+  type: ClusterIP

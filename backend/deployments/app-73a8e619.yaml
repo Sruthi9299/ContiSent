@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-73a8e619
+  namespace: prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-73a8e619
+  template:
+    metadata:
+      labels:
+        app: app-73a8e619
+    spec:
+      containers:
+      - image: alpine:latest
+        name: web
+        ports:
+        - containerPort: 80
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-73a8e619-svc
+  namespace: prod
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: app-73a8e619
+  type: ClusterIP

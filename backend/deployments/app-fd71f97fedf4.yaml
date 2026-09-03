@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-fd71f97fedf4
+  namespace: prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-fd71f97fedf4
+  template:
+    metadata:
+      labels:
+        app: app-fd71f97fedf4
+    spec:
+      containers:
+      - image: nginx:alpine
+        name: web
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-fd71f97fedf4-svc
+  namespace: prod
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: app-fd71f97fedf4
+  type: ClusterIP

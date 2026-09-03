@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-51692b1c
+  namespace: prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-51692b1c
+  template:
+    metadata:
+      labels:
+        app: app-51692b1c
+    spec:
+      containers:
+      - image: httpd:alpine
+        name: web
+        ports:
+        - containerPort: 80
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-51692b1c-svc
+  namespace: prod
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: app-51692b1c
+  type: ClusterIP
