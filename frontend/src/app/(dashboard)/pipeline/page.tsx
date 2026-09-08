@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { API_BASE_URL } from "@/lib/config";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -27,7 +27,7 @@ export default function PipelinePage() {
     setExpandedRows(newExpanded);
   };
 
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
@@ -47,14 +47,15 @@ export default function PipelinePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSubmissions();
     // Auto-refresh every 10 seconds
     const interval = setInterval(fetchSubmissions, 10000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [fetchSubmissions]);
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
@@ -149,6 +150,7 @@ export default function PipelinePage() {
                               <DetailedWorkflow 
                                 status={sub.status} 
                                 isDast={sub.scan_result?.full_json?.ArtifactType === "website" || (sub.type === "url" && !sub.source_uri.includes(".git") && !sub.source_uri.includes("github.com") && !sub.scan_result)}
+                                hasFailedDeployment={sub.deployment?.status === "failed"}
                               />
                            </TableCell>
                         </TableRow>

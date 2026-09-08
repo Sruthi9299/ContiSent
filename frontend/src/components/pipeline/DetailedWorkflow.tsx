@@ -1,12 +1,13 @@
 import React from "react";
-import { CheckCircle2, XCircle, Loader2, Circle, ArrowDown, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Circle, ArrowDown } from "lucide-react";
 
 export interface DetailedWorkflowProps {
   status: string;
   isDast?: boolean;
+  hasFailedDeployment?: boolean;
 }
 
-const Node = ({ label, state, icon: Icon, className = "" }: any) => {
+const Node = ({ label, state, className = "" }: any) => {
   return (
     <div className={`relative flex flex-col items-center justify-center p-3 w-40 text-center rounded-lg border-2 shadow-sm bg-white z-10 ${state === 'active' ? 'border-blue-500 shadow-blue-100' : state === 'completed' ? 'border-green-500' : state === 'failed' ? 'border-red-500 bg-red-50' : 'border-slate-200'} ${className}`}>
       {state === "completed" && <CheckCircle2 className="w-6 h-6 text-green-500 mb-1" />}
@@ -26,9 +27,9 @@ const Arrow = ({ className = "h-8" }: { className?: string }) => (
   </div>
 );
 
-export function DetailedWorkflow({ status, isDast = false }: DetailedWorkflowProps) {
+export function DetailedWorkflow({ status, isDast = false, hasFailedDeployment = false }: DetailedWorkflowProps) {
   const statusLower = status.toLowerCase();
-  let isFailed = statusLower === "failed" || statusLower === "quarantined";
+  const isFailed = statusLower === "failed" || statusLower === "quarantined";
 
   // Sequence for regular SAST/SCA
   const sequence = [
@@ -52,6 +53,10 @@ export function DetailedWorkflow({ status, isDast = false }: DetailedWorkflowPro
       if (failureNode && stageIndex === currentIndex) return "failed";
       if (!failureNode && stageIndex === currentIndex) return "failed";
       if (stageIndex < currentIndex) return "completed";
+      return "pending";
+    } else if (hasFailedDeployment) {
+      if (stageIndex < 4) return "completed";
+      if (stageIndex === 4) return "failed";
       return "pending";
     } else {
       if (statusLower === "completed") return "completed";

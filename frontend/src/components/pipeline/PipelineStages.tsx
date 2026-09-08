@@ -14,7 +14,7 @@ export function PipelineStages({ status }: PipelineStagesProps) {
 
   let currentStage = 0;
   const statusLower = status.toLowerCase();
-  let isFailed = statusLower === "failed";
+  const isFailed = statusLower === "failed";
   
   if (statusLower === "queued" || statusLower === "building") {
     currentStage = 0; // Image extraction

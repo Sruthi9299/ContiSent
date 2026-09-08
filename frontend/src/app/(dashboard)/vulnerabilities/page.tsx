@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { API_BASE_URL } from "@/lib/config";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +14,7 @@ export default function VulnerabilitiesPage() {
   const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchVulnerabilities = async () => {
+  const fetchVulnerabilities = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
@@ -32,11 +32,12 @@ export default function VulnerabilitiesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchVulnerabilities();
-  }, [token]);
+  }, [fetchVulnerabilities]);
 
   const getSeverityBadge = (severity: string) => {
     switch (severity.toUpperCase()) {

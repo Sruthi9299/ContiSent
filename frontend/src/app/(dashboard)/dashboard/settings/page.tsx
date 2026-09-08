@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,15 +50,7 @@ export default function SettingsPage() {
   const [linkedDevices, setLinkedDevices] = useState<LinkedDevice[]>([]);
   const [loginHistory, setLoginHistory] = useState<AuditLog[]>([]);
 
-  useEffect(() => {
-    setMounted(true);
-    if (authToken) {
-      fetchDevices();
-      fetchHistory();
-    }
-  }, [authToken]);
-
-  const fetchDevices = async () => {
+  const fetchDevices = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/users/sessions`, {
         headers: { Authorization: `Bearer ${authToken}` }
@@ -69,9 +61,9 @@ export default function SettingsPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [authToken]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/users/audit-logs`, {
         headers: { Authorization: `Bearer ${authToken}` }
@@ -82,7 +74,16 @@ export default function SettingsPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [authToken]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+    if (authToken) {
+      fetchDevices();
+      fetchHistory();
+    }
+  }, [authToken, fetchDevices, fetchHistory]);
 
   const revokeDevice = async (id: number) => {
     try {

@@ -1,6 +1,5 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import html2canvas from "html2canvas";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -31,7 +30,8 @@ const addParagraph = (doc: jsPDF, text: string, yPos: number, fontSize = 12): nu
   return yPos + (lines.length * (fontSize * 0.4)) + 5;
 };
 
-export const generateProfessionalReport = async (subDetails: any, flowchartElementId: string, chartElementId: string) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const generateProfessionalReport = async (subDetails: any, _flowchartElementId: string, _chartElementId: string) => {
   const doc = new jsPDF();
   let pageNumber = 1;
 
@@ -48,14 +48,14 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   // --- PAGE 1: Beautiful Title Page ---
   doc.setFillColor(41, 128, 185);
   doc.rect(0, 0, PAGE_WIDTH, 100, 'F');
-  
+
   doc.setFontSize(36);
   doc.setTextColor(255, 255, 255);
   doc.text("ContiSent", PAGE_WIDTH / 2, 45, { align: 'center' });
-  
+
   doc.setFontSize(20);
   doc.text("Comprehensive Security & Compliance Report", PAGE_WIDTH / 2, 60, { align: 'center' });
-  
+
   doc.setFontSize(14);
   doc.setTextColor(230, 230, 230);
   doc.text(new Date(subDetails.created_at).toLocaleString(), PAGE_WIDTH / 2, 75, { align: 'center' });
@@ -66,10 +66,10 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   doc.text("Executive Summary", MARGIN, y);
   doc.setDrawColor(41, 128, 185);
   doc.line(MARGIN, y + 2, PAGE_WIDTH - MARGIN, y + 2);
-  
+
   y += 15;
   y = addParagraph(doc, "This document provides a highly detailed, multi-stage analysis of the target application's security posture. It encompasses the complete DevSecOps lifecycle including initial source acquisition, container detection, deep vulnerability scanning via Trivy, software composition analysis (SBOM) via Syft, strict policy enforcement, and final kubernetes deployment checks.", y, 12);
-  
+
   y += 10;
   doc.setFillColor(245, 247, 250);
   doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 40, 3, 3, 'F');
@@ -78,37 +78,37 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   doc.text(`Target: ${subDetails.source_uri}`, MARGIN + 5, y + 15);
   doc.text(`Type: ${subDetails.type.toUpperCase()}`, MARGIN + 5, y + 25);
   doc.text(`Status: ${subDetails.status.toUpperCase()}`, MARGIN + 5, y + 35);
-  
+
   const isDast = subDetails.scan_result?.full_json?.ArtifactType === "website" || (subDetails.type === "url" && !subDetails.source_uri.includes(".git") && !subDetails.source_uri.includes("github.com") && !subDetails.scan_result);
 
   y = checkPageBreak(y, 80);
-  
+
   doc.setFontSize(18);
   doc.setTextColor(41, 128, 185);
   doc.text("1. Pipeline Architecture & Flow", MARGIN, y);
   doc.line(MARGIN, y + 2, PAGE_WIDTH - MARGIN, y + 2);
   y += 15;
-  
+
   y = addParagraph(doc, "The automated pipeline executed the following discrete stages in an isolated, ephemeral sandbox environment:", y, 11);
   y += 5;
-  
+
   // Draw an inline flowchart vertically
   const stages = isDast ? [
-    "Target Verification", 
-    "HTTP Headers Analysis", 
-    "Transport Security (TLS)", 
-    "CSP Verification", 
-    "Security Policy Evaluation", 
+    "Target Verification",
+    "HTTP Headers Analysis",
+    "Transport Security (TLS)",
+    "CSP Verification",
+    "Security Policy Evaluation",
     "Report Generation"
   ] : [
-    "URL Analysis & Source Acquisition", 
-    "Docker Detection & Secure Build", 
-    "Trivy Vulnerability & Secret Scan", 
-    "Syft SBOM Generation", 
-    "Security Policy Evaluation", 
+    "URL Analysis & Source Acquisition",
+    "Docker Detection & Secure Build",
+    "Trivy Vulnerability & Secret Scan",
+    "Syft SBOM Generation",
+    "Security Policy Evaluation",
     "Kubernetes Deployment Gate"
   ];
-  
+
   stages.forEach((stage, idx) => {
     y = checkPageBreak(y, 25);
     doc.setFillColor(41, 128, 185);
@@ -124,7 +124,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   });
 
   y = checkPageBreak(y, 40);
-  
+
   // --- DETAILED STAGES ---
   doc.setFontSize(18);
   doc.setTextColor(41, 128, 185);
@@ -147,7 +147,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   y = checkPageBreak(y, 60);
   doc.setFontSize(18);
   doc.setTextColor(41, 128, 185);
-  
+
   if (isDast) {
     doc.text("3. Dynamic Analysis & Configuration", MARGIN, y);
     doc.line(MARGIN, y + 2, PAGE_WIDTH - MARGIN, y + 2);
@@ -174,29 +174,29 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   doc.text(isDast ? "4. Web Vulnerability Findings" : "4. Vulnerability & Security Scans", MARGIN, y);
   doc.line(MARGIN, y + 2, PAGE_WIDTH - MARGIN, y + 2);
   y += 15;
-  
+
   if (subDetails.scan_result) {
     const sr = subDetails.scan_result;
-    
+
     // Draw a beautiful summary box
     doc.setFillColor(245, 247, 250);
     doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 25, 2, 2, 'F');
-    
+
     doc.setFontSize(12);
     doc.setTextColor(231, 76, 60);
     doc.text(`CRITICAL: ${sr.critical_count}`, MARGIN + 10, y + 15);
-    
+
     doc.setTextColor(243, 156, 18);
     doc.text(`HIGH: ${sr.high_count}`, MARGIN + 50, y + 15);
-    
+
     doc.setTextColor(241, 196, 15);
     doc.text(`MEDIUM: ${sr.medium_count}`, MARGIN + 90, y + 15);
-    
+
     doc.setTextColor(52, 152, 219);
     doc.text(`LOW: ${sr.low_count}`, MARGIN + 130, y + 15);
-    
+
     y += 35;
-    
+
     if (isDast) {
       y = addParagraph(doc, "The DAST scanner evaluates the target's live responses against modern OWASP best practices. Missing headers or insecure transport layers directly expose end-users to man-in-the-middle (MitM) attacks or client-side execution vulnerabilities. The table below outlines every specific misconfiguration detected during the active probing session.", y, 11);
     } else {
@@ -204,10 +204,10 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
       y += 5;
       y = addParagraph(doc, "In addition to software flaws, the engine actively hunts for hardcoded secrets, misconfigurations, and exposed private keys embedded within the container layers. The table below lists the most severe vulnerabilities discovered in the artifact.", y, 11);
     }
-    
+
     if (subDetails.scan_result.full_json) {
       const findings: any[] = [];
-      
+
       if (subDetails.scan_result.full_json.Results) {
         subDetails.scan_result.full_json.Results.forEach((res: any) => {
           if (res.Vulnerabilities) {
@@ -215,17 +215,17 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
           }
         });
       }
-      
+
       const sevMap: any = { "CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1 };
       findings.sort((a, b) => (sevMap[b.Severity] || 0) - (sevMap[a.Severity] || 0));
-      
+
       const tableData = findings.slice(0, 50).map(v => [
         v.VulnerabilityID,
         v.PkgName || "N/A",
         v.Severity,
         isDast ? "Config" : (v.InstalledVersion || "N/A")
       ]);
-      
+
       if (tableData.length > 0) {
         autoTable(doc, {
           startY: y + 5,
@@ -253,7 +253,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   doc.text(isDast ? "5. Transport Security Validation" : "5. Software Bill of Materials (SBOM)", MARGIN, y);
   doc.line(MARGIN, y + 2, PAGE_WIDTH - MARGIN, y + 2);
   y += 15;
-  
+
   if (isDast) {
     y = addParagraph(doc, "Transport Layer Security (TLS/HTTPS) is critically important for protecting data in transit. Insecure HTTP endpoints leave applications vulnerable to eavesdropping, data tampering, and session hijacking.", y, 11);
     y += 5;
@@ -264,20 +264,20 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
     y = addParagraph(doc, "A Software Bill of Materials (SBOM) is a formal, machine-readable inventory of software components and dependencies. In this pipeline, we generate a comprehensive SBOM for compliance auditing and supply chain visibility.", y, 11);
     y += 5;
     y = addParagraph(doc, "The generated SBOM maps the entire dependency tree of the application, including transitive dependencies that developers may not explicitly declare. This level of transparency is mandatory under modern federal cybersecurity executive orders and frameworks like SLSA (Supply-chain Levels for Software Artifacts).", y, 11);
-    
+
     if (subDetails.scan_result && subDetails.scan_result.sbom_json) {
       const artifacts = subDetails.scan_result.sbom_json.artifacts || [];
-      
+
       if (artifacts.length > 0) {
         y += 5;
         y = addParagraph(doc, `Total Components Discovered: ${artifacts.length}. Below is a partial list of the core components identified in the application stack.`, y, 12);
-        
+
         const tableData = artifacts.slice(0, 40).map((a: any) => [
           a.name,
           a.version,
           a.type
         ]);
-        
+
         autoTable(doc, {
           startY: y + 5,
           head: [['Component Name', 'Version', 'Type']],
@@ -304,7 +304,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   doc.text("6. Security Policy & Deployment Strategy", MARGIN, y);
   doc.line(MARGIN, y + 2, PAGE_WIDTH - MARGIN, y + 2);
   y += 15;
-  
+
   if (subDetails.policy_decision) {
     const pd = subDetails.policy_decision;
     doc.setFontSize(14);
@@ -322,7 +322,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
     y += 5;
     y = addParagraph(doc, "A 'FAIL' decision triggers an immediate circuit breaker mechanism, halting the CI/CD pipeline and preventing the artifact from being deployed. A 'PASS' decision signs the artifact cryptographically, attesting that it met all security requirements at the time of the scan.", y, 11);
   }
-  
+
   y += 10;
   if (!isDast && subDetails.deployment) {
     const dep = subDetails.deployment;
@@ -341,7 +341,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   }
 
   // --- MASSIVE APPENDICES FOR 12-PAGE DEPTH ---
-  
+
   // Appendix A: Methodology
   doc.addPage();
   addFooter(doc, pageNumber++);
@@ -349,7 +349,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   y = 35;
   y = addParagraph(doc, "This appendix details the exact standards and frameworks enforced by the ContiSent pipeline. Our methodology is rooted in industry-standard compliance requirements, ensuring that every scan produces actionable, audit-ready data.", y, 11);
   y += 10;
-  
+
   doc.setFontSize(14);
   doc.setTextColor(41, 128, 185);
   doc.text("A.1 Web Application Security Standards (OWASP)", MARGIN, y);
@@ -373,7 +373,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   addHeader(doc, "Appendix B: Compliance & Regulatory Mapping");
   y = 35;
   y = addParagraph(doc, "The automated checks performed by this pipeline directly map to various global regulatory and compliance frameworks. This section outlines how our security gates satisfy specific controls.", y, 11);
-  
+
   y += 10;
   doc.setFontSize(14);
   doc.setTextColor(41, 128, 185);
@@ -401,7 +401,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   addHeader(doc, "Appendix C: Vulnerability Remediation Guide");
   y = 35;
   y = addParagraph(doc, "When vulnerabilities are detected, development and operations teams must collaborate to apply fixes rapidly. This guide outlines the standard operating procedures for remediation.", y, 11);
-  
+
   y += 10;
   doc.setFontSize(14);
   doc.setTextColor(41, 128, 185);
@@ -428,7 +428,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
   addFooter(doc, pageNumber++);
   addHeader(doc, "Appendix D: Glossary of Terms");
   y = 35;
-  
+
   const glossary = [
     { term: "CVE (Common Vulnerabilities and Exposures)", def: "A list of publicly disclosed cybersecurity vulnerabilities, each assigned a unique ID." },
     { term: "CVSS (Common Vulnerability Scoring System)", def: "An open framework for communicating the characteristics and severity of software vulnerabilities." },
@@ -439,7 +439,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
     { term: "CSP (Content Security Policy)", def: "An added layer of security that helps to detect and mitigate certain types of attacks, including XSS." },
     { term: "HSTS (HTTP Strict Transport Security)", def: "A policy mechanism that helps to protect websites against man-in-the-middle attacks such as protocol downgrade attacks." }
   ];
-  
+
   glossary.forEach(item => {
     doc.setFontSize(12);
     doc.setTextColor(41, 128, 185);
@@ -449,7 +449,7 @@ export const generateProfessionalReport = async (subDetails: any, flowchartEleme
     y = addParagraph(doc, item.def, y, 11);
     y += 5;
   });
-  
+
   y += 10;
   doc.setFontSize(10);
   doc.setTextColor(150, 150, 150);

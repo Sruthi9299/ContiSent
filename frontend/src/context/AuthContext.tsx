@@ -69,7 +69,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setToken(storedToken);
       fetchUser(storedToken);
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

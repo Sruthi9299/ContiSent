@@ -6,7 +6,7 @@ import { API_BASE_URL } from "@/lib/config";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileJson, Package, Shield, Download } from "lucide-react";
+import { FileJson, Package, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function SbomPage() {
@@ -15,29 +15,29 @@ export default function SbomPage() {
   const [selectedSub, setSelectedSub] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchSubmissions = async () => {
-    if (!token) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/submissions/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const completed = data.filter((s: any) => s.status.toLowerCase() === 'completed');
-        setSubmissions(completed);
-        if (completed.length > 0) {
-          setSelectedSub(completed[0].id.toString());
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch submissions", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchSubmissions = async () => {
+      if (!token) return;
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/submissions/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const completed = data.filter((s: any) => s.status.toLowerCase() === 'completed');
+          setSubmissions(completed);
+          if (completed.length > 0) {
+            setSelectedSub(completed[0].id.toString());
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch submissions", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchSubmissions();
   }, [token]);
 

@@ -41,6 +41,7 @@ class DeploymentBase(BaseModel):
     namespace: str
     cluster: str
     status: DeploymentStatus
+    access_url: Optional[str] = None
     timestamp: datetime
     
     @field_validator('timestamp', mode='before')
@@ -61,8 +62,17 @@ class SubmissionBase(BaseModel):
             raise ValueError("source_uri cannot be empty")
         return v.strip()
 
+class DeploymentConfigCreate(BaseModel):
+    namespace: Optional[str] = "default"
+    replicas: Optional[int] = 3
+    cpu_limit: Optional[str] = "500m"
+    memory_limit: Optional[str] = "512Mi"
+    enable_redis: Optional[bool] = False
+    enable_postgres: Optional[bool] = False
+    ingress_host: Optional[str] = None
+
 class SubmissionCreate(SubmissionBase):
-    pass
+    deployment_config: Optional[DeploymentConfigCreate] = None
 
 class SubmissionUpdate(BaseModel):
     status: Optional[SubmissionStatus] = None
@@ -85,3 +95,16 @@ class Submission(SubmissionInDBBase):
     scan_result: Optional[ScanResultBase] = None
     policy_decision: Optional[PolicyDecisionBase] = None
     deployment: Optional[DeploymentBase] = None
+
+class TrendData(BaseModel):
+    name: str
+    critical: int
+    high: int
+    medium: int
+
+class DashboardStats(BaseModel):
+    scanned_images: int
+    critical_vulns: int
+    active_deployments: int
+    policy_compliance: float
+    trends: list[TrendData]

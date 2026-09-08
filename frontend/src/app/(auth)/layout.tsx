@@ -38,7 +38,7 @@ export default function AuthLayout({
               Secure your containers from build to runtime.
             </h2>
             <p className="text-slate-400 text-lg leading-relaxed">
-              Automate vulnerability scanning, enforce security policies, and monitor runtime threats with the industry's most advanced Contisent Platform.
+              Automate vulnerability scanning, enforce security policies, and monitor runtime threats with the industry&apos;s most advanced Contisent Platform.
             </p>
           </div>
         </div>

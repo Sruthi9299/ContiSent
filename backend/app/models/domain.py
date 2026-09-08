@@ -86,6 +86,8 @@ class Submission(Base):
     scan_result: Mapped["ScanResult"] = relationship("ScanResult", back_populates="submission", uselist=False, cascade="all, delete-orphan")
     policy_decision: Mapped["PolicyDecision"] = relationship("PolicyDecision", back_populates="submission", uselist=False, cascade="all, delete-orphan")
     deployment: Mapped["Deployment"] = relationship("Deployment", back_populates="submission", uselist=False, cascade="all, delete-orphan")
+    deployment_config: Mapped["DeploymentConfig"] = relationship("DeploymentConfig", back_populates="submission", uselist=False, cascade="all, delete-orphan")
+    policy_profile: Mapped["PolicyProfile"] = relationship("PolicyProfile", back_populates="submission", uselist=False, cascade="all, delete-orphan")
 
 class ScanResult(Base):
     __tablename__ = "scan_results"
@@ -140,6 +142,32 @@ class Finding(Base):
     reported_at: Mapped[datetime] = mapped_column(DateTime, default=default_datetime)
 
     deployment: Mapped["Deployment"] = relationship("Deployment", back_populates="findings")
+
+class DeploymentConfig(Base):
+    __tablename__ = "deployment_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("submissions.id"), unique=True)
+    namespace: Mapped[str] = mapped_column(String(255), default="default")
+    replicas: Mapped[int] = mapped_column(Integer, default=3)
+    cpu_limit: Mapped[str] = mapped_column(String(50), default="500m")
+    memory_limit: Mapped[str] = mapped_column(String(50), default="512Mi")
+    enable_redis: Mapped[bool] = mapped_column(Boolean, default=False)
+    enable_postgres: Mapped[bool] = mapped_column(Boolean, default=False)
+    ingress_host: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    submission: Mapped["Submission"] = relationship("Submission", back_populates="deployment_config")
+
+class PolicyProfile(Base):
+    __tablename__ = "policy_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("submissions.id"), unique=True)
+    max_critical: Mapped[int] = mapped_column(Integer, default=0)
+    max_high: Mapped[int] = mapped_column(Integer, default=10)
+    whitelisted_cves: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+
+    submission: Mapped["Submission"] = relationship("Submission", back_populates="policy_profile")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

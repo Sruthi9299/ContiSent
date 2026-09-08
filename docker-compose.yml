@@ -30,10 +30,14 @@ services:
       - SQLALCHEMY_DATABASE_URI=postgresql+psycopg://postgres:password@db:5432/contisent
       - SECRET_KEY=mysecretkey123456789012345678901234567890
       - VERIFY_SSL_CERTS=true
+      - USE_CELERY=true
+      - CELERY_BROKER_URL=redis://message_broker:6379/0
+      - CELERY_RESULT_BACKEND=redis://message_broker:6379/0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend/deployments:/app/generated_deployments
       - ~/.kube:/home/appuser/.kube:ro
+      - ~/.minikube:/home/appuser/.minikube:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -41,6 +45,31 @@ services:
       retries: 3
       start_period: 5s
     
+  message_broker:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+      
+  celery_worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - message_broker
+    env_file:
+      - ./backend/.env
+    environment:
+      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg://postgres:password@db:5432/contisent
+      - SECRET_KEY=mysecretkey123456789012345678901234567890
+      - CELERY_BROKER_URL=redis://message_broker:6379/0
+      - CELERY_RESULT_BACKEND=redis://message_broker:6379/0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./backend/deployments:/app/generated_deployments
+      - ~/.kube:/home/appuser/.kube:ro
+      - ~/.minikube:/home/appuser/.minikube:ro
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info"]
   frontend:
     build:
       context: ./frontend

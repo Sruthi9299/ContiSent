@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, ShieldCheck, Box, Activity, UploadCloud, ArrowRight, Download, Server, GitBranch } from "lucide-react";
@@ -11,8 +11,6 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { API_BASE_URL } from "@/lib/config";
 import { Check } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   AreaChart,
   Area,
@@ -23,20 +21,54 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const data = [
-  { name: "Jan", critical: 40, high: 24, medium: 24 },
-  { name: "Feb", critical: 30, high: 13, medium: 22 },
-  { name: "Mar", critical: 20, high: 58, medium: 22 },
-  { name: "Apr", critical: 27, high: 39, medium: 20 },
-  { name: "May", critical: 18, high: 48, medium: 21 },
-  { name: "Jun", critical: 23, high: 38, medium: 25 },
-  { name: "Jul", critical: 34, high: 43, medium: 21 },
-];
+interface TrendData {
+  name: string;
+  critical: number;
+  high: number;
+  medium: number;
+}
+
+interface DashboardStats {
+  scanned_images: number;
+  critical_vulns: number;
+  active_deployments: number;
+  policy_compliance: number;
+  trends: TrendData[];
+}
 
 export default function DashboardPage() {
   const { token } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [enableRedis, setEnableRedis] = useState(false);
+  const [enablePostgres, setEnablePostgres] = useState(false);
+  const [ingressHost, setIngressHost] = useState("");
+  
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  const fetchStats = useCallback(async () => {
+    setIsLoadingStats(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/submissions/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setStats(await res.json());
+      }
+    } catch (e) {
+      console.error("Failed to fetch stats", e);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchStats();
+    }
+  }, [token, fetchStats]);
 
   const handleScanSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -61,13 +93,22 @@ export default function DashboardPage() {
     }
 
     try {
+      const payload = {
+        type,
+        source_uri: sourceUri,
+        deployment_config: {
+          enable_redis: enableRedis,
+          enable_postgres: enablePostgres,
+          ingress_host: ingressHost || null,
+        }
+      };
       const res = await fetch(`${API_BASE_URL}/submissions/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ type, source_uri: sourceUri })
+        body: JSON.stringify(payload)
       });
       
       if (res.ok) {
@@ -146,10 +187,10 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 px-6">
         {[
-          { title: "Scanned Images", value: "1,284", icon: Box, color: "text-blue-500", desc: "+12% from last month" },
-          { title: "Critical Vulns", value: "23", icon: ShieldAlert, color: "text-red-500", desc: "-4% from last week", valColor: "text-red-600" },
-          { title: "Active Deployments", value: "342", icon: Activity, color: "text-blue-500", desc: "Across 3 clusters" },
-          { title: "Policy Compliance", value: "98.2%", icon: ShieldCheck, color: "text-green-500", desc: "+2.1% from last month", valColor: "text-green-600" }
+          { title: "Scanned Images", value: isLoadingStats ? "..." : (stats?.scanned_images ?? "0"), icon: Box, color: "text-blue-500", desc: "Total applications scanned" },
+          { title: "Critical Vulns", value: isLoadingStats ? "..." : (stats?.critical_vulns ?? "0"), icon: ShieldAlert, color: "text-red-500", desc: "Total critical issues", valColor: "text-red-600" },
+          { title: "Active Deployments", value: isLoadingStats ? "..." : (stats?.active_deployments ?? "0"), icon: Activity, color: "text-blue-500", desc: "Running safely" },
+          { title: "Policy Compliance", value: isLoadingStats ? "..." : `${stats?.policy_compliance ?? "0"}%`, icon: ShieldCheck, color: "text-green-500", desc: "Pass rate", valColor: "text-green-600" }
         ].map((stat, i) => (
           <Card key={i} className="group overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm shadow-sm transition-all hover:-translate-y-1 hover:shadow-md hover:border-primary/50 cursor-default">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -176,7 +217,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pl-0 h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <AreaChart data={stats?.trends?.slice().reverse() || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorCritical" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.8}/>
@@ -268,6 +309,22 @@ export default function DashboardPage() {
                       </div>
                     </TabsContent>
                   </Tabs>
+                  
+                  <div className="mt-4 border-t pt-4 space-y-3">
+                    <h4 className="text-sm font-medium text-foreground">Advanced Deployment Options</h4>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="redis" checked={enableRedis} onChange={(e) => setEnableRedis(e.target.checked)} className="rounded border-slate-300 w-4 h-4" />
+                      <Label htmlFor="redis" className="text-sm cursor-pointer">Enable Redis Cache</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="postgres" checked={enablePostgres} onChange={(e) => setEnablePostgres(e.target.checked)} className="rounded border-slate-300 w-4 h-4" />
+                      <Label htmlFor="postgres" className="text-sm cursor-pointer">Enable PostgreSQL Database</Label>
+                    </div>
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="ingress" className="text-sm">Ingress Host (Optional)</Label>
+                      <Input id="ingress" placeholder="api.myapp.internal" value={ingressHost} onChange={(e) => setIngressHost(e.target.value)} className="bg-background/50 h-8 text-sm" />
+                    </div>
+                  </div>
                   
                   <DialogFooter className="mt-8 border-t pt-4">
                     <Button type="submit" className="w-full sm:w-auto shadow-md transition-transform active:scale-95" disabled={isSubmitting}>

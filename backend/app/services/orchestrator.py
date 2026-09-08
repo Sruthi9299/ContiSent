@@ -2,10 +2,12 @@ from typing import Dict, Any
 import logging
 import uuid
 import yaml
+import tempfile
+import os
+import concurrent.futures
 from app.api.deps import SessionLocal
 from app.models.domain import Submission, SubmissionStatus, ScanResult, PolicyDecision, PolicyDecisionEnum
 from app.services.scanner import run_trivy_scan, run_syft_scan, run_syft_scan_on_url, is_git_repo, run_website_dast_scan, run_checkov_scan_on_url, run_kube_bench_scan
-import tempfile
 # pyrefly: ignore [missing-import]
 from kubernetes import client, config, utils
 
@@ -48,30 +50,33 @@ class OrchestratorService:
             kube_bench_result = {}
             
             try:
-                if submission.type == "url":
-                    if is_git_repo(target):
-                        logger.info("Target is a Git Repository, running SAST/SCA")
-                        trivy_result = run_trivy_scan(target, target_type="repo")
-                        try:
-                            syft_result = run_syft_scan_on_url(target)
-                        except Exception as e:
-                            logger.warning(f"Syft scan on URL failed for {target}, ignoring for MVP: {e}")
-                        try:
-                            checkov_result = run_checkov_scan_on_url(target)
-                        except Exception as e:
-                            logger.warning(f"Checkov scan on URL failed for {target}: {e}")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                    futures = {}
+                    if submission.type == "url":
+                        if is_git_repo(target):
+                            logger.info("Target is a Git Repository, running SAST/SCA")
+                            futures['trivy'] = executor.submit(run_trivy_scan, target, "repo")
+                            futures['syft'] = executor.submit(run_syft_scan_on_url, target)
+                            futures['checkov'] = executor.submit(run_checkov_scan_on_url, target)
+                        else:
+                            logger.info("Target is NOT a Git repository. Treating as a live website (DAST).")
+                            futures['trivy'] = executor.submit(run_website_dast_scan, target)
                     else:
-                        logger.info("Target is NOT a Git repository. Treating as a live website (DAST).")
-                        trivy_result = run_website_dast_scan(target)
-                        # Live websites do not yield SBOMs in our MVP
-                        syft_result = {}
-                else:
-                    logger.info("Target is an Image, running container scans")
-                    trivy_result = run_trivy_scan(target, target_type="image")
-                    try:
-                        syft_result = run_syft_scan(target)
-                    except Exception as e:
-                        logger.warning(f"Syft scan failed for {target}, ignoring for MVP: {e}")
+                        logger.info("Target is an Image, running container scans")
+                        futures['trivy'] = executor.submit(run_trivy_scan, target, "image")
+                        futures['syft'] = executor.submit(run_syft_scan, target)
+
+                    for name, future in futures.items():
+                        try:
+                            if name == 'trivy':
+                                trivy_result = future.result()
+                            elif name == 'syft':
+                                syft_result = future.result()
+                            elif name == 'checkov':
+                                checkov_result = future.result()
+                        except Exception as e:
+                            logger.error(f"{name} scan failed for {target}: {e}")
+                            raise
             except Exception as e:
                 logger.error(f"Scan failed for submission {submission_id}: {e}")
                 submission.status = SubmissionStatus.FAILED
@@ -84,10 +89,18 @@ class OrchestratorService:
             medium = 0
             low = 0
 
+            policy = submission.policy_profile
+            whitelisted_cves = policy.whitelisted_cves if policy and policy.whitelisted_cves else []
+
             results = trivy_result.get("Results", [])
             for result in results:
                 vulnerabilities = result.get("Vulnerabilities", [])
                 for v in vulnerabilities:
+                    vuln_id = v.get("VulnerabilityID", "")
+                    if vuln_id in whitelisted_cves:
+                        logger.info(f"Ignoring whitelisted CVE: {vuln_id}")
+                        continue
+                        
                     severity = v.get("Severity", "").upper()
                     if severity == "CRITICAL":
                         critical += 1
@@ -120,9 +133,16 @@ class OrchestratorService:
             # Evaluate Policy
             decision = PolicyDecisionEnum.PASS
             reason = "Scan passed successfully."
-            if critical > 0:
+            
+            max_crit = policy.max_critical if policy else 0
+            max_hi = policy.max_high if policy else 10
+            
+            if critical > max_crit:
                 decision = PolicyDecisionEnum.FAIL
-                reason = f"Failed policy: found {critical} critical vulnerabilities."
+                reason = f"Failed policy: found {critical} critical vulnerabilities (max allowed: {max_crit})."
+            elif high > max_hi:
+                decision = PolicyDecisionEnum.FAIL
+                reason = f"Failed policy: found {high} high vulnerabilities (max allowed: {max_hi})."
             
             policy_decision = PolicyDecision(
                 submission_id=submission_id,
@@ -140,22 +160,31 @@ class OrchestratorService:
                 db.commit()
                 
                 from app.models.domain import Deployment, DeploymentStatus
-                import os
-                import subprocess
                 
                 # Use UUID to avoid collisions
                 safe_name = f"app-{uuid.uuid4().hex[:12]}"
                 image_name = target if submission.type == "image" else "nginxinc/nginx-unprivileged:alpine"
+                
+                dep_config = submission.deployment_config
+                namespace = dep_config.namespace if dep_config else "default"
+                replicas = dep_config.replicas if dep_config else 3
+                cpu_limit = dep_config.cpu_limit if dep_config else "500m"
+                memory_limit = dep_config.memory_limit if dep_config else "512Mi"
+                enable_redis = dep_config.enable_redis if dep_config else False
+                enable_postgres = dep_config.enable_postgres if dep_config else False
+                ingress_host = dep_config.ingress_host if dep_config else None
+                
+                manifests = []
                 
                 deployment_manifest = {
                     "apiVersion": "apps/v1",
                     "kind": "Deployment",
                     "metadata": {
                         "name": safe_name,
-                        "namespace": "default"
+                        "namespace": namespace
                     },
                     "spec": {
-                        "replicas": 3,
+                        "replicas": replicas,
                         "selector": {
                             "matchLabels": {
                                 "app": safe_name
@@ -175,8 +204,8 @@ class OrchestratorService:
                                         "ports": [{"containerPort": 80}],
                                         "resources": {
                                             "limits": {
-                                                "memory": "512Mi",
-                                                "cpu": "500m"
+                                                "memory": memory_limit,
+                                                "cpu": cpu_limit
                                             },
                                             "requests": {
                                                 "memory": "256Mi",
@@ -194,13 +223,14 @@ class OrchestratorService:
                         }
                     }
                 }
+                manifests.append(deployment_manifest)
                 
                 service_manifest = {
                     "apiVersion": "v1",
                     "kind": "Service",
                     "metadata": {
                         "name": f"{safe_name}-svc",
-                        "namespace": "default"
+                        "namespace": namespace
                     },
                     "spec": {
                         "selector": {
@@ -212,14 +242,146 @@ class OrchestratorService:
                         "type": "NodePort"
                     }
                 }
+                manifests.append(service_manifest)
                 
+                if enable_redis:
+                    redis_pvc = {
+                        "apiVersion": "v1",
+                        "kind": "PersistentVolumeClaim",
+                        "metadata": {"name": f"{safe_name}-redis-pvc", "namespace": namespace},
+                        "spec": {
+                            "accessModes": ["ReadWriteOnce"],
+                            "resources": {"requests": {"storage": "1Gi"}}
+                        }
+                    }
+                    redis_dep = {
+                        "apiVersion": "apps/v1",
+                        "kind": "Deployment",
+                        "metadata": {"name": f"{safe_name}-redis", "namespace": namespace},
+                        "spec": {
+                            "replicas": 1,
+                            "selector": {"matchLabels": {"app": f"{safe_name}-redis"}},
+                            "template": {
+                                "metadata": {"labels": {"app": f"{safe_name}-redis"}},
+                                "spec": {
+                                    "containers": [{
+                                        "name": "redis", 
+                                        "image": "redis:alpine", 
+                                        "ports": [{"containerPort": 6379}],
+                                        "volumeMounts": [{"name": "data", "mountPath": "/data"}]
+                                    }],
+                                    "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": f"{safe_name}-redis-pvc"}}]
+                                }
+                            }
+                        }
+                    }
+                    redis_svc = {
+                        "apiVersion": "v1",
+                        "kind": "Service",
+                        "metadata": {"name": f"{safe_name}-redis", "namespace": namespace},
+                        "spec": {"selector": {"app": f"{safe_name}-redis"}, "ports": [{"port": 6379}]}
+                    }
+                    manifests.extend([redis_pvc, redis_dep, redis_svc])
+
+                if enable_postgres:
+                    import base64
+                    pg_secret = {
+                        "apiVersion": "v1",
+                        "kind": "Secret",
+                        "metadata": {"name": f"{safe_name}-pg-secret", "namespace": namespace},
+                        "type": "Opaque",
+                        "data": {
+                            "POSTGRES_USER": base64.b64encode(b"postgres").decode("utf-8"),
+                            "POSTGRES_PASSWORD": base64.b64encode(b"securepassword123").decode("utf-8")
+                        }
+                    }
+                    pg_pvc = {
+                        "apiVersion": "v1",
+                        "kind": "PersistentVolumeClaim",
+                        "metadata": {"name": f"{safe_name}-pg-pvc", "namespace": namespace},
+                        "spec": {
+                            "accessModes": ["ReadWriteOnce"],
+                            "resources": {"requests": {"storage": "5Gi"}}
+                        }
+                    }
+                    pg_dep = {
+                        "apiVersion": "apps/v1",
+                        "kind": "Deployment",
+                        "metadata": {"name": f"{safe_name}-postgres", "namespace": namespace},
+                        "spec": {
+                            "replicas": 1,
+                            "selector": {"matchLabels": {"app": f"{safe_name}-postgres"}},
+                            "template": {
+                                "metadata": {"labels": {"app": f"{safe_name}-postgres"}},
+                                "spec": {
+                                    "containers": [
+                                        {
+                                            "name": "postgres", 
+                                            "image": "postgres:13-alpine", 
+                                            "ports": [{"containerPort": 5432}],
+                                            "envFrom": [{"secretRef": {"name": f"{safe_name}-pg-secret"}}],
+                                            "volumeMounts": [{"name": "pgdata", "mountPath": "/var/lib/postgresql/data"}]
+                                        }
+                                    ],
+                                    "volumes": [{"name": "pgdata", "persistentVolumeClaim": {"claimName": f"{safe_name}-pg-pvc"}}]
+                                }
+                            }
+                        }
+                    }
+                    pg_svc = {
+                        "apiVersion": "v1",
+                        "kind": "Service",
+                        "metadata": {"name": f"{safe_name}-postgres", "namespace": namespace},
+                        "spec": {"selector": {"app": f"{safe_name}-postgres"}, "ports": [{"port": 5432}]}
+                    }
+                    manifests.extend([pg_secret, pg_pvc, pg_dep, pg_svc])
+
+                if ingress_host:
+                    ingress_manifest = {
+                        "apiVersion": "networking.k8s.io/v1",
+                        "kind": "Ingress",
+                        "metadata": {"name": f"{safe_name}-ingress", "namespace": namespace},
+                        "spec": {
+                            "rules": [{
+                                "host": ingress_host,
+                                "http": {
+                                    "paths": [{
+                                        "path": "/",
+                                        "pathType": "Prefix",
+                                        "backend": {
+                                            "service": {
+                                                "name": f"{safe_name}-svc",
+                                                "port": {"number": 80}
+                                            }
+                                        }
+                                    }]
+                                }
+                            }]
+                        }
+                    }
+                    manifests.append(ingress_manifest)
+
+                network_policy = {
+                    "apiVersion": "networking.k8s.io/v1",
+                    "kind": "NetworkPolicy",
+                    "metadata": {"name": f"{safe_name}-deny-all", "namespace": namespace},
+                    "spec": {
+                        "podSelector": {},
+                        "policyTypes": ["Ingress"],
+                        "ingress": [{
+                            "from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "ingress-nginx"}}}]
+                        }]
+                    }
+                }
+                manifests.append(network_policy)
+
                 deploy_dir = "/app/generated_deployments"
                 os.makedirs(deploy_dir, exist_ok=True)
                 
                 yaml_path = os.path.join(deploy_dir, f"{safe_name}.yaml")
                 try:
                     with open(yaml_path, "w") as f:
-                        yaml.safe_dump_all([deployment_manifest, service_manifest], f)
+                        yaml.safe_dump_all(manifests, f)
                     
                     logger.info(f"Kubernetes Deployment Manifest generated at {yaml_path}")
                 except Exception as e:
@@ -230,36 +392,57 @@ class OrchestratorService:
                 
                 # Execute True Kubernetes Deployment using python-kubernetes
                 try:
-                    logger.info(f"Deploying {safe_name} to True Kubernetes Cluster")
+                    logger.info(f"Deploying {safe_name} to True Kubernetes Cluster in namespace {namespace}")
                     
-                    # Read the kubeconfig from the mounted volume
-                    kubeconfig_path = "/home/appuser/.kube/config"
-                    with open(kubeconfig_path, 'r') as f:
-                        kube_config = yaml.safe_load(f)
-                        
-                    # Modify the server URL to point to host.docker.internal instead of 127.0.0.1
-                    for cluster in kube_config.get('clusters', []):
-                        server = cluster['cluster']['server']
-                        if '127.0.0.1' in server or 'kubernetes.docker.internal' in server:
-                            cluster['cluster']['server'] = server.replace('127.0.0.1', 'host.docker.internal').replace('kubernetes.docker.internal', 'host.docker.internal')
-                        # Disable TLS verification due to hostname mismatch
-                        cluster['cluster']['insecure-skip-tls-verify'] = True
-                        if 'certificate-authority-data' in cluster['cluster']:
-                            del cluster['cluster']['certificate-authority-data']
+                    k8s_mode = os.environ.get("K8S_DEPLOY_MODE", "local")
+                    
+                    if k8s_mode == "in-cluster":
+                        config.load_incluster_config()
+                    else:
+                        # Read the kubeconfig from the mounted volume
+                        kubeconfig_path = "/home/appuser/.kube/config"
+                        if not os.path.exists(kubeconfig_path):
+                             # fallback for local development if not in container
+                             kubeconfig_path = os.path.expanduser("~/.kube/config")
+                             
+                        with open(kubeconfig_path, 'r') as f:
+                            kube_config = yaml.safe_load(f)
                             
-                    # Save the modified kubeconfig
-                    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-                        yaml.dump(kube_config, f)
-                        temp_config_path = f.name
+                        # Modify the server URL to point to host.docker.internal instead of 127.0.0.1
+                        for cluster in kube_config.get('clusters', []):
+                            server = cluster['cluster']['server']
+                            if '127.0.0.1' in server or 'kubernetes.docker.internal' in server:
+                                cluster['cluster']['server'] = server.replace('127.0.0.1', 'host.docker.internal').replace('kubernetes.docker.internal', 'host.docker.internal')
+                            # Disable TLS verification due to hostname mismatch
+                            cluster['cluster']['insecure-skip-tls-verify'] = True
+                            if 'certificate-authority-data' in cluster['cluster']:
+                                del cluster['cluster']['certificate-authority-data']
+                            if 'certificate-authority' in cluster['cluster']:
+                                del cluster['cluster']['certificate-authority']
+                                
+                        # Fix Windows paths for minikube certificates
+                        import re
+                        for user in kube_config.get('users', []):
+                            u = user.get('user', {})
+                            for key in ['client-certificate', 'client-key']:
+                                if key in u and isinstance(u[key], str):
+                                    # Translate C:\Users\name\.minikube\... to /home/appuser/.minikube/...
+                                    u[key] = re.sub(r'^[a-zA-Z]:\\Users\\[^\\]+\\.minikube', '/home/appuser/.minikube', u[key]).replace('\\', '/')
+                                
+                        # Save the modified kubeconfig
+                        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                            yaml.dump(kube_config, f)
+                            temp_config_path = f.name
+                            
+                        # Load the config and apply the YAML
+                        config.load_kube_config(config_file=temp_config_path)
                         
-                    # Load the config and apply the YAML
-                    config.load_kube_config(config_file=temp_config_path)
                     k8s_client = client.ApiClient()
                     utils.create_from_yaml(k8s_client, yaml_path)
                     
                     # Fetch the assigned NodePort
                     core_v1 = client.CoreV1Api(k8s_client)
-                    svc = core_v1.read_namespaced_service(name=f"{safe_name}-svc", namespace="default")
+                    svc = core_v1.read_namespaced_service(name=f"{safe_name}-svc", namespace=namespace)
                     node_port = svc.spec.ports[0].node_port
                     access_url = f"http://localhost:{node_port}"
                     
@@ -268,8 +451,8 @@ class OrchestratorService:
                     # Actual deployment success
                     deployment = Deployment(
                         submission_id=submission_id,
-                        namespace="default",
-                        cluster="docker-desktop-kubernetes",
+                        namespace=namespace,
+                        cluster="in-cluster" if k8s_mode == "in-cluster" else "docker-desktop-kubernetes",
                         status=DeploymentStatus.SUCCEEDED,
                         access_url=access_url
                     )
@@ -291,8 +474,8 @@ class OrchestratorService:
                     # Create a FAILED deployment record so it shows up in UI
                     deployment = Deployment(
                         submission_id=submission_id,
-                        namespace="default",
-                        cluster="docker-desktop-kubernetes",
+                        namespace=namespace,
+                        cluster="in-cluster" if k8s_mode == "in-cluster" else "docker-desktop-kubernetes",
                         status=DeploymentStatus.FAILED,
                         access_url=None
                     )

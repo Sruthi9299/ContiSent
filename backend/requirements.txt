@@ -16,3 +16,5 @@ urllib3<2
 slowapi>=0.1.5
 pyyaml>=6.0
 checkov>=3.2.0
+celery==5.3.6
+redis==5.0.1

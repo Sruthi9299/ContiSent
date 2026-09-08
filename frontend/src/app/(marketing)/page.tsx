@@ -5,7 +5,6 @@ import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import type { Engine } from "@tsparticles/engine";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { ArrowRight, ShieldCheck, Zap, Lock, BarChart3, ChevronRight } from "lucide-react";
 
 export default function LandingPage() {

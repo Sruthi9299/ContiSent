@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: str = os.getenv("EMAILS_FROM_EMAIL", "noreply@contisent.app")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    # Architecture
+    USE_CELERY: bool = os.getenv("USE_CELERY", "false").lower() == "true"
+    
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
     
     def __init__(self, **data):
         super().__init__(**data)

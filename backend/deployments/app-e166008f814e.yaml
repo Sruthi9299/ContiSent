@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-e166008f814e
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-e166008f814e
+  template:
+    metadata:
+      labels:
+        app: app-e166008f814e
+    spec:
+      containers:
+      - image: alpine:latest
+        name: web
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-e166008f814e-svc
+  namespace: default
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: app-e166008f814e
+  type: NodePort
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-e166008f814e-redis-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-e166008f814e-redis
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-e166008f814e-redis
+  template:
+    metadata:
+      labels:
+        app: app-e166008f814e-redis
+    spec:
+      containers:
+      - image: redis:alpine
+        name: redis
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - mountPath: /data
+          name: data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: app-e166008f814e-redis-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-e166008f814e-redis
+  namespace: default
+spec:
+  ports:
+  - port: 6379
+  selector:
+    app: app-e166008f814e-redis
+---
+apiVersion: v1
+data:
+  POSTGRES_PASSWORD: c2VjdXJlcGFzc3dvcmQxMjM=
+  POSTGRES_USER: cG9zdGdyZXM=
+kind: Secret
+metadata:
+  name: app-e166008f814e-pg-secret
+  namespace: default
+type: Opaque
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-e166008f814e-pg-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-e166008f814e-postgres
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-e166008f814e-postgres
+  template:
+    metadata:
+      labels:
+        app: app-e166008f814e-postgres
+    spec:
+      containers:
+      - envFrom:
+        - secretRef:
+            name: app-e166008f814e-pg-secret
+        image: postgres:13-alpine
+        name: postgres
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: pgdata
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: app-e166008f814e-pg-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-e166008f814e-postgres
+  namespace: default
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: app-e166008f814e-postgres
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-e166008f814e-deny-all
+  namespace: default
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+  podSelector: {}
+  policyTypes:
+  - Ingress

@@ -8,9 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ShieldCheck, ShieldAlert, FileText, CheckCircle, AlertTriangle, Lightbulb, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-
 export default function ReportsPage() {
   const { token } = useAuth();
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -18,30 +15,30 @@ export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
-  const fetchSubmissions = async () => {
-    if (!token) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/submissions/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Sort by newest
-        const sorted = data.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setSubmissions(sorted);
-        if (sorted.length > 0) {
-          setSelectedSub(sorted[0].id.toString());
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch submissions", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchSubmissions = async () => {
+      if (!token) return;
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/submissions/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Sort by newest
+          const sorted = data.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          setSubmissions(sorted);
+          if (sorted.length > 0) {
+            setSelectedSub(sorted[0].id.toString());
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch submissions", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchSubmissions();
   }, [token]);
 
@@ -120,7 +117,7 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {currentSub && currentSub.status.toLowerCase() !== "failed" && (
+        {currentSub && currentSub.status.toLowerCase() === "completed" && (
           <div className="space-y-6">
             <Card className="border-green-500/50 bg-green-500/5 shadow-sm">
               <CardHeader>
@@ -203,7 +200,7 @@ export default function ReportsPage() {
                       </li>
                       <li className="flex items-start gap-2">
                         <CheckCircle className="h-4 w-4 text-green-500 mt-1" />
-                        <span className="text-sm text-slate-600">If you are scanning a Docker Image, verify that the image tag exists on Docker Hub (e.g. 'nginx:latest').</span>
+                        <span className="text-sm text-slate-600">If you are scanning a Docker Image, verify that the image tag exists on Docker Hub (e.g. &apos;nginx:latest&apos;).</span>
                       </li>
                     </ul>
                  </div>

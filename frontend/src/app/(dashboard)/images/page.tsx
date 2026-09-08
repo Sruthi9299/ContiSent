@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { API_BASE_URL } from "@/lib/config";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertTriangle, Box } from "lucide-react";
+import { CheckCircle, Box } from "lucide-react";
 
 export default function ImagesPage() {
   const { token } = useAuth();
   const [images, setImages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
@@ -44,11 +44,12 @@ export default function ImagesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchImages();
-  }, [token]);
+  }, [fetchImages]);
 
   return (
     <div className="flex-1 space-y-6">

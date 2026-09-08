@@ -7,13 +7,35 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ExternalLink, Box, Server, CheckCircle, AlertTriangle } from "lucide-react";
+import { RefreshCw, ExternalLink, Box, Server, CheckCircle, AlertTriangle, Trash2 } from "lucide-react";
 import React from "react";
 
 export default function DeploymentsPage() {
   const { token } = useAuth();
   const [deployments, setDeployments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleDeleteDeployment = async (id: number) => {
+    if (!token) return;
+    if (!confirm("Are you sure you want to delete this deployment? This action cannot be undone.")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/submissions/${id}/deployment`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        fetchDeployments();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to delete deployment");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting deployment");
+    }
+  };
 
   const fetchDeployments = async () => {
     if (!token) return;
@@ -44,7 +66,7 @@ export default function DeploymentsPage() {
     // Auto-refresh every 10 seconds
     const interval = setInterval(fetchDeployments, 10000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [fetchDeployments]);
 
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -119,19 +141,29 @@ export default function DeploymentsPage() {
                         {new Date(sub.deployment.timestamp.endsWith('Z') ? sub.deployment.timestamp : `${sub.deployment.timestamp}Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </TableCell>
                       <TableCell className="text-right">
-                        {sub.deployment.access_url ? (
-                           <Button 
-                              variant="default" 
-                              size="sm" 
-                              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
-                              onClick={() => window.open(sub.deployment.access_url, '_blank')}
-                           >
-                             <ExternalLink className="w-4 h-4 mr-2" />
-                             Open App
-                           </Button>
-                        ) : (
-                           <span className="text-muted-foreground text-xs italic">URL Unavailable</span>
-                        )}
+                        <div className="flex justify-end gap-2">
+                            {sub.deployment.access_url ? (
+                               <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
+                                  onClick={() => window.open(sub.deployment.access_url, '_blank')}
+                               >
+                                 <ExternalLink className="w-4 h-4 mr-2" />
+                                 Open
+                               </Button>
+                            ) : (
+                               <span className="text-muted-foreground text-xs italic flex items-center">URL Unavailable</span>
+                            )}
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              className="shadow-sm transition-all"
+                              onClick={() => handleDeleteDeployment(sub.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
