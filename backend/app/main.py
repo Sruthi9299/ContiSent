@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.api.routers import auth, submissions, users, notifications, vulnerabilities
+from app.db.session import engine
+from app.models.domain import Base
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -30,11 +32,14 @@ async def rate_limit_exceeded_handler(request, exc):
 # Set CORS with restricted origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS.split(","),
+    allow_origins=[origin.strip().rstrip("/") for origin in settings.ALLOWED_ORIGINS.split(",")],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
 )
+
+# Automatically create database tables if they don't exist
+Base.metadata.create_all(bind=engine)
 
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
 app.include_router(submissions.router, prefix="/api/v1/submissions", tags=["submissions"])
