@@ -95,7 +95,7 @@ def get_dashboard_stats(
     
     # 5. Trends
     trends = []
-    today = datetime.now(timezone.utc)
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
     for i in range(6, -1, -1):
         target_month = today.month - i
         target_year = today.year
@@ -103,11 +103,11 @@ def get_dashboard_stats(
             target_month += 12
             target_year -= 1
             
-        start_date = datetime(target_year, target_month, 1, tzinfo=timezone.utc)
+        start_date = datetime(target_year, target_month, 1)
         if target_month == 12:
-            end_date = datetime(target_year + 1, 1, 1, tzinfo=timezone.utc)
+            end_date = datetime(target_year + 1, 1, 1)
         else:
-            end_date = datetime(target_year, target_month + 1, 1, tzinfo=timezone.utc)
+            end_date = datetime(target_year, target_month + 1, 1)
             
         counts = db.query(
             func.sum(ScanResult.critical_count).label('crit'),

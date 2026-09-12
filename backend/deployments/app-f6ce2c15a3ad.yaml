@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-f6ce2c15a3ad
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-f6ce2c15a3ad
+  template:
+    metadata:
+      labels:
+        app: app-f6ce2c15a3ad
+    spec:
+      containers:
+      - image: nginxinc/nginx-unprivileged:alpine
+        name: web
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-f6ce2c15a3ad-svc
+  namespace: default
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: app-f6ce2c15a3ad
+  type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-f6ce2c15a3ad-deny-all
+  namespace: default
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+  podSelector: {}
+  policyTypes:
+  - Ingress

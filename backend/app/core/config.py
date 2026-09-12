@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Container Security Automation Platform"
     
     # Database Settings
-    SQLALCHEMY_DATABASE_URI: str = "sqlite:///./container_security.db"
+    SQLALCHEMY_DATABASE_URI: str = os.getenv("DATABASE_URL", "sqlite:///./container_security.db")
     
     # Auth settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120  # 2 hours
     
     # CORS settings
-    ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001"]
+    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
     
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = True

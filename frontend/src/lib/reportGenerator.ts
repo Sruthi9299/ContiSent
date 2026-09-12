@@ -79,6 +79,8 @@ export const generateProfessionalReport = async (subDetails: any, _flowchartElem
   doc.text(`Type: ${subDetails.type.toUpperCase()}`, MARGIN + 5, y + 25);
   doc.text(`Status: ${subDetails.status.toUpperCase()}`, MARGIN + 5, y + 35);
 
+  y += 50;
+
   const isDast = subDetails.scan_result?.full_json?.ArtifactType === "website" || (subDetails.type === "url" && !subDetails.source_uri.includes(".git") && !subDetails.source_uri.includes("github.com") && !subDetails.scan_result);
 
   y = checkPageBreak(y, 80);

@@ -52,7 +52,7 @@ class OrchestratorService:
             try:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                     futures = {}
-                    if submission.type == "url":
+                    if submission.type and submission.type.lower() == "url":
                         if is_git_repo(target):
                             logger.info("Target is a Git Repository, running SAST/SCA")
                             futures['trivy'] = executor.submit(run_trivy_scan, target, "repo")
@@ -163,7 +163,8 @@ class OrchestratorService:
                 
                 # Use UUID to avoid collisions
                 safe_name = f"app-{uuid.uuid4().hex[:12]}"
-                image_name = target if submission.type == "image" else "nginxinc/nginx-unprivileged:alpine"
+                image_name = target if submission.type and submission.type.lower() == "image" else "nginxinc/nginx-unprivileged:alpine"
+                container_port = 80 if submission.type and submission.type.lower() == "image" else 8080
                 
                 dep_config = submission.deployment_config
                 namespace = dep_config.namespace if dep_config else "default"
@@ -201,7 +202,7 @@ class OrchestratorService:
                                     {
                                         "name": "web",
                                         "image": image_name,
-                                        "ports": [{"containerPort": 80}],
+                                        "ports": [{"containerPort": container_port}],
                                         "resources": {
                                             "limits": {
                                                 "memory": memory_limit,
@@ -237,7 +238,7 @@ class OrchestratorService:
                             "app": safe_name
                         },
                         "ports": [
-                            {"protocol": "TCP", "port": 80, "targetPort": 80}
+                            {"protocol": "TCP", "port": 80, "targetPort": container_port}
                         ],
                         "type": "NodePort"
                     }
@@ -444,7 +445,23 @@ class OrchestratorService:
                     core_v1 = client.CoreV1Api(k8s_client)
                     svc = core_v1.read_namespaced_service(name=f"{safe_name}-svc", namespace=namespace)
                     node_port = svc.spec.ports[0].node_port
-                    access_url = f"http://localhost:{node_port}"
+                    
+                    # Determine Node IP dynamically instead of hardcoding localhost
+                    node_ip = "localhost"
+                    try:
+                        nodes = core_v1.list_node()
+                        if nodes.items:
+                            for address in nodes.items[0].status.addresses:
+                                if address.type == "InternalIP":
+                                    node_ip = address.address
+                                    break
+                    except Exception as e:
+                        logger.warning(f"Could not fetch node IP, falling back to localhost: {e}")
+                        
+                    if submission.type and submission.type.lower() == "url":
+                        access_url = target
+                    else:
+                        access_url = f"http://{node_ip}:{node_port}"
                     
                     logger.info(f"Successfully deployed {safe_name} to Kubernetes! Available at {access_url}")
                     

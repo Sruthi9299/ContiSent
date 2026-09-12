@@ -1,0 +1,63 @@
+name: Security Scan Pipeline
+
+on:
+  # Allows your FastAPI backend to trigger this workflow via API
+  repository_dispatch:
+    types: [start-scan]
+  # Allows you to manually trigger it from the GitHub Actions tab for testing
+  workflow_dispatch:
+
+jobs:
+  devsecops-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Build Docker Image
+        run: |
+          echo "Building target container..."
+          # Note: In a real scenario, this builds the user's submitted code. 
+          # We'll build a simple alpine image for demonstration.
+          echo "FROM alpine:latest" > Dockerfile.target
+          docker build -t contisent-target:latest -f Dockerfile.target .
+
+      - name: 🛡️ Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'contisent-target:latest'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: 📦 Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'contisent-target:latest'
+          format: 'spdx-json'
+          output-file: 'sbom.spdx.json'
+
+      - name: ☸️ Setup Kubernetes (Kind)
+        uses: helm/kind-action@v1.9.0
+        with:
+          cluster_name: contisent-test-cluster
+
+      - name: 🚀 Test Kubernetes Deployment
+        run: |
+          echo "Loading image into local Kubernetes cluster..."
+          kind load docker-image contisent-target:latest --name contisent-test-cluster
+          
+          echo "Deploying to Kubernetes to verify runtime..."
+          kubectl create deployment test-app --image=contisent-target:latest --dry-run=client -o yaml > deploy.yaml
+          kubectl apply -f deploy.yaml
+          
+          echo "Waiting for pods to be ready..."
+          kubectl wait --for=condition=available --timeout=60s deployment/test-app
+          echo "✅ Deployment successful and verified!"
+
+      - name: 📡 Send Webhook back to Render Backend
+        run: |
+          echo "Sending results back to your database..."
+          # When your backend is live, you will put your Render URL here:
+          # curl -X POST https://contisent-backend.onrender.com/api/v1/webhook -d '{"status":"success"}'

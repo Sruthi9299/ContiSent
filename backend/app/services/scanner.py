@@ -71,93 +71,83 @@ def is_git_repo(url: str) -> bool:
 
 def run_website_dast_scan(url: str) -> Dict[str, Any]:
     """
-    Performs a lightweight Dynamic Website Security Analysis (DAST) on a live URL.
-    Checks security headers and returns a Trivy-compatible JSON payload.
+    Performs a Dynamic Website Security Analysis (DAST) on a live URL using Nmap and Nikto.
+    Checks for open ports, missing headers, and common web vulnerabilities.
+    Returns a Trivy-compatible JSON payload.
     """
     if not is_valid_url(url):
         raise ValueError(f"Invalid or internal URL: {url}")
     
-    logger.info(f"Running DAST scan on {url}")
+    logger.info(f"Running real-time DAST scan on {url}")
     synthetic_results = []
     
     # Ensure URL has scheme
     if not url.startswith("http"):
         url = "http://" + url
         
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    
+    if not hostname:
+        raise ValueError(f"Could not parse hostname from URL: {url}")
+        
     try:
-        # Use default SSL context (verification enabled by default)
-        ctx = ssl.create_default_context()
+        # 1. Run a real Nmap scan for web vulnerabilities
+        logger.info(f"Running Nmap HTTP scripts on {hostname}")
+        nmap_cmd = ["nmap", "-sV", "--script", "http-security-headers,http-methods", "-p", "80,443", hostname]
+        nmap_result = subprocess.run(nmap_cmd, capture_output=True, text=True, timeout=120)
+        nmap_output = nmap_result.stdout
         
-        req = urllib.request.Request(
-            url, 
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        )
-        
-        try:
-            with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
-                headers_dict = dict(response.info())
-                final_url = response.geturl()
-        except urllib.error.HTTPError as e:
-            logger.warning(f"DAST scan received HTTP {e.code} for {url}, continuing with headers.")
-            headers_dict = dict(e.headers)
-            final_url = e.url
-            
-        header_checks = [
-            {
-                "header": "Strict-Transport-Security", 
-                "id": "DAST-HSTS-MISSING", 
-                "title": "Missing HTTP Strict Transport Security (HSTS) Header",
-                "severity": "HIGH"
-            },
-            {
-                "header": "Content-Security-Policy", 
-                "id": "DAST-CSP-MISSING", 
-                "title": "Missing Content-Security-Policy (CSP) Header",
-                "severity": "MEDIUM"
-            },
-            {
-                "header": "X-Frame-Options", 
-                "id": "DAST-XFRAME-MISSING", 
-                "title": "Missing X-Frame-Options Header (Clickjacking Risk)",
-                "severity": "MEDIUM"
-            },
-            {
-                "header": "X-Content-Type-Options", 
-                "id": "DAST-XCTO-MISSING", 
-                "title": "Missing X-Content-Type-Options Header",
-                "severity": "LOW"
-            }
-        ]
-        
-        # Convert headers to lowercase for case-insensitive matching
-        headers_lower = {k.lower(): v for k, v in headers_dict.items()}
-        
-        for check in header_checks:
-            if check["header"].lower() not in headers_lower:
+        # Parse Nmap Output
+        for line in nmap_output.split('\n'):
+            line_clean = line.strip()
+            if "open" in line_clean and ("http" in line_clean or "ssl" in line_clean):
                 synthetic_results.append({
-                    "VulnerabilityID": check["id"],
-                    "PkgName": "HTTP Security Headers",
-                    "Severity": check["severity"],
-                    "InstalledVersion": "Missing",
-                    "Title": check["title"],
-                    "Description": f"The website does not enforce the {check['header']} security header."
+                    "VulnerabilityID": "DAST-NMAP-PORT",
+                    "PkgName": "Network Port",
+                    "Severity": "LOW",
+                    "InstalledVersion": "",
+                    "Title": "Open Web Port",
+                    "Description": f"Nmap found open port: {line_clean}"
                 })
-                
-        # Check if HTTP redirects to HTTPS or if they use HTTP natively
-        parsed = urlparse(final_url)
-        if parsed.scheme == "http":
-            synthetic_results.append({
-                "VulnerabilityID": "DAST-INSECURE-HTTP",
-                "PkgName": "Transport Security",
-                "Severity": "CRITICAL",
-                "InstalledVersion": "HTTP",
-                "Title": "Insecure Transport (HTTP)",
-                "Description": "The application allows insecure HTTP connections without redirecting to HTTPS."
-            })
+            elif "missing" in line_clean.lower() or "warning" in line_clean.lower():
+                synthetic_results.append({
+                    "VulnerabilityID": "DAST-NMAP-WARNING",
+                    "PkgName": "Nmap Script Check",
+                    "Severity": "MEDIUM",
+                    "InstalledVersion": "",
+                    "Title": "Nmap Security Warning",
+                    "Description": line_clean
+                })
+
+        # 2. Run Nikto scanner for deeper web vulnerabilities
+        try:
+            logger.info(f"Running Nikto scan on {url}")
+            nikto_cmd = ["nikto", "-h", url, "-maxtime", "60"]
+            nikto_result = subprocess.run(nikto_cmd, capture_output=True, text=True, timeout=90)
+            nikto_output = nikto_result.stdout
             
+            # Parse Nikto Output
+            for line in nikto_output.split('\n'):
+                line_clean = line.strip()
+                if line_clean.startswith("+") and not line_clean.startswith("+ Target") and not line_clean.startswith("+ Server"):
+                    severity = "HIGH" if "OSVDB" in line_clean else "MEDIUM"
+                    synthetic_results.append({
+                        "VulnerabilityID": "DAST-NIKTO-VULN",
+                        "PkgName": "Nikto Scanner",
+                        "Severity": severity,
+                        "InstalledVersion": "",
+                        "Title": "Nikto Web Finding",
+                        "Description": line_clean.lstrip('+ ')
+                    })
+        except FileNotFoundError:
+            logger.warning("Nikto is not installed. DAST scan will only include Nmap results.")
+                
+    except subprocess.TimeoutExpired:
+        logger.warning("DAST scans timed out, returning partial results.")
     except Exception as e:
-        logger.error(f"DAST scan failed to connect: {e}")
-        raise RuntimeError(f"DAST scanner failed to reach website: {e}")
+        logger.error(f"DAST scan failed to execute tools: {e}")
+        raise RuntimeError(f"DAST scanner failed to process website: {e}")
         
     return {
         "SchemaVersion": 2,
@@ -177,8 +167,8 @@ def run_trivy_scan(target: str, target_type: str = "image") -> Dict[str, Any]:
     Returns the vulnerability report as a dictionary.
     """
     try:
-        # Construct the Trivy command
-        cmd = ["trivy", target_type, "--format", "json", target]
+        # Construct the Trivy command with a high internal timeout
+        cmd = ["trivy", target_type, "--format", "json", "--timeout", "45m", target]
         logger.info(f"Running Trivy scan: {' '.join(cmd)}")
         
         result = subprocess.run(
@@ -186,7 +176,7 @@ def run_trivy_scan(target: str, target_type: str = "image") -> Dict[str, Any]:
             capture_output=True,
             text=True,
             check=False,
-            timeout=300
+            timeout=2700  # 45 minutes
         )
         
         if result.returncode not in [0, 1]:
@@ -195,12 +185,15 @@ def run_trivy_scan(target: str, target_type: str = "image") -> Dict[str, Any]:
             
         return json.loads(result.stdout)
         
+    except subprocess.TimeoutExpired:
+        logger.error(f"Trivy scan timed out for {target}")
+        raise RuntimeError(f"Trivy scan timed out. The image is too large or took longer than 45 minutes to analyze.")
     except FileNotFoundError:
         logger.error("Trivy is not installed or not in PATH.")
         raise RuntimeError("Trivy is not installed or not in PATH.")
     except json.JSONDecodeError:
-        logger.error("Failed to parse Trivy JSON output.")
-        raise RuntimeError("Failed to parse Trivy JSON output.")
+        logger.error("Failed to parse Trivy JSON output. The process may have been killed due to out-of-memory (OOM).")
+        raise RuntimeError("Failed to parse Trivy JSON output (possible Out of Memory error).")
 
 def run_syft_scan(target: str) -> Dict[str, Any]:
     """
@@ -215,11 +208,14 @@ def run_syft_scan(target: str) -> Dict[str, Any]:
             capture_output=True,
             text=True,
             check=True,
-            timeout=300
+            timeout=2700  # 45 minutes
         )
         
         return json.loads(result.stdout)
         
+    except subprocess.TimeoutExpired:
+        logger.error(f"Syft scan timed out for {target}")
+        raise RuntimeError(f"Syft scan timed out. The image is too large or took longer than 45 minutes to analyze.")
     except FileNotFoundError:
         logger.error("Syft is not installed or not in PATH.")
         raise RuntimeError("Syft is not installed or not in PATH.")

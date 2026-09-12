@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +12,24 @@ export default function ProfilePage() {
   const { user } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (user?.email) {
+      const saved = localStorage.getItem(`avatar_${user.email}`);
+      if (saved) setAvatarUrl(saved);
+    }
+  }, [user]);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAvatarUrl(reader.result as string);
+        const result = reader.result as string;
+        setAvatarUrl(result);
+        if (user?.email) {
+          localStorage.setItem(`avatar_${user.email}`, result);
+          window.dispatchEvent(new Event('avatarChanged'));
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -36,7 +48,7 @@ export default function ProfilePage() {
             <CardDescription>Your basic account details and public profile.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
-            
+
             {/* Avatar Section */}
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <div className="relative group">
@@ -47,17 +59,17 @@ export default function ProfilePage() {
                     <User className="h-12 w-12 text-muted-foreground opacity-50" />
                   )}
                 </div>
-                <Label 
-                  htmlFor="avatar-upload" 
+                <Label
+                  htmlFor="avatar-upload"
                   className="absolute bottom-0 right-0 h-10 w-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-primary/90 hover:scale-110 transition-all ring-4 ring-background"
                 >
                   <Camera className="h-5 w-5" />
                 </Label>
-                <input 
-                  type="file" 
-                  id="avatar-upload" 
-                  accept="image/*" 
-                  className="hidden" 
+                <input
+                  type="file"
+                  id="avatar-upload"
+                  accept="image/*"
+                  className="hidden"
                   onChange={handleImageUpload}
                 />
               </div>
@@ -71,7 +83,13 @@ export default function ProfilePage() {
                     <Upload className="h-4 w-4 mr-2" /> Upload Image
                   </Button>
                   {avatarUrl && (
-                    <Button variant="ghost" size="sm" onClick={() => setAvatarUrl(null)} className="text-red-500 hover:text-red-600 hover:bg-red-500/10">
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setAvatarUrl(null);
+                      if (user?.email) {
+                        localStorage.removeItem(`avatar_${user.email}`);
+                        window.dispatchEvent(new Event('avatarChanged'));
+                      }
+                    }} className="text-red-500 hover:text-red-600 hover:bg-red-500/10">
                       Remove
                     </Button>
                   )}

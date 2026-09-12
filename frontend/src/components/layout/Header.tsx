@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, Search, User, LogOut, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,6 +26,21 @@ const notifications = [
 export function Header() {
   const { user, logout } = useAuth();
   const [unreadCount, setUnreadCount] = useState(notifications.filter(n => n.unread).length);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadAvatar = () => {
+      if (user?.email) {
+        const saved = localStorage.getItem(`avatar_${user.email}`);
+        setAvatarUrl(saved || null);
+      }
+    };
+    
+    loadAvatar();
+    
+    window.addEventListener('avatarChanged', loadAvatar);
+    return () => window.removeEventListener('avatarChanged', loadAvatar);
+  }, [user]);
 
   const markAllAsRead = () => {
     // In a real app, this would hit the backend: POST /notifications/mark-all-read
@@ -85,8 +100,8 @@ export function Header() {
           <DropdownMenuTrigger render={
             <button className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
               <Avatar className="h-8 w-8 cursor-pointer border border-slate-200 hover:ring-2 hover:ring-blue-500 hover:ring-offset-2 transition-all">
-                <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
-                <AvatarFallback>AD</AvatarFallback>
+                <AvatarImage src={avatarUrl || "https://github.com/shadcn.png"} alt="@user" className="object-cover" />
+                <AvatarFallback>{user?.username?.substring(0, 2).toUpperCase() || "AD"}</AvatarFallback>
               </Avatar>
             </button>
           } />
