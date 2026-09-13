@@ -17,10 +17,7 @@ jobs:
       - name: 🐳 Build Docker Image
         run: |
           echo "Building target container..."
-          # Note: In a real scenario, this builds the user's submitted code. 
-          # We'll build a simple alpine image for demonstration.
-          echo "FROM alpine:latest" > Dockerfile.target
-          docker build -t contisent-target:latest -f Dockerfile.target .
+          docker build -t contisent-target:latest ./backend
 
       - name: 🛡️ Run Trivy Vulnerability Scanner
         uses: aquasecurity/trivy-action@master
