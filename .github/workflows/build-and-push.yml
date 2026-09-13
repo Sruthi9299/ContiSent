@@ -44,5 +44,5 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}/contisent-backend:latest
           labels: ${{ steps.meta.outputs.labels }}
-          # We build for ARM64 because Oracle Cloud Always Free uses ARM architecture
-          platforms: linux/arm64 
+          # Build for standard AMD64 (required for Render)
+          platforms: linux/amd64

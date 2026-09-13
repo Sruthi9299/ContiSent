@@ -64,7 +64,8 @@ class OrchestratorService:
                     else:
                         logger.info("Target is an Image, running container scans")
                         futures['trivy'] = executor.submit(run_trivy_scan, target, "image")
-                        futures['syft'] = executor.submit(run_syft_scan, target)
+                        # Prefix with registry: to pull without needing a local Docker daemon
+                        futures['syft'] = executor.submit(run_syft_scan, f"registry:{target}")
 
                     for name, future in futures.items():
                         try:
