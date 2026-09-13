@@ -33,7 +33,7 @@ jobs:
 
       - name: Downcase REPO
         run: |
-          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+          echo "REPO=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -46,7 +46,7 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ghcr.io/${{ env.REPO }}/contisent-backend:latest
+          tags: ghcr.io/${{ env.REPO }}/contisent-backend:latest 
           labels: ${{ steps.meta.outputs.labels }}
           # Build for standard AMD64 (required for Render)
           platforms: linux/amd64
