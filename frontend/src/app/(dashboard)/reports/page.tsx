@@ -209,6 +209,69 @@ export default function ReportsPage() {
             </Card>
           </div>
         )}
+
+        {currentSub && currentSub.status.toLowerCase() === "quarantined" && (
+          <div className="space-y-6">
+            <Card className="border-orange-500/50 bg-orange-500/5 shadow-sm">
+              <CardHeader>
+                 <div className="flex items-center gap-2 text-orange-600">
+                    <ShieldAlert className="h-6 w-6" />
+                    <CardTitle>Scan Quarantined (Policy Violation)</CardTitle>
+                 </div>
+                 <CardDescription className="text-orange-600/80">
+                   The target was successfully scanned, but it was blocked from deployment because it violates your security policy.
+                 </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                 
+                 <div className="bg-white p-4 rounded-lg border border-orange-200 border-l-4 border-l-orange-500">
+                    <h3 className="font-semibold text-orange-700 flex items-center gap-2 mb-2">
+                       <AlertTriangle className="h-4 w-4" /> Policy Engine Decision
+                    </h3>
+                    <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded mt-2 border border-slate-200">
+                      Target <strong>{currentSub.source_uri}</strong> was quarantined because it exceeds the maximum allowed vulnerabilities defined in the default security policy (0 Critical, 10 High).
+                    </p>
+                 </div>
+
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <div className="text-sm font-medium text-slate-500 mb-1">Critical</div>
+                      <div className="text-2xl font-bold text-red-500">{currentSub.scan_result?.critical_count || 0}</div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <div className="text-sm font-medium text-slate-500 mb-1">High</div>
+                      <div className="text-2xl font-bold text-orange-500">{currentSub.scan_result?.high_count || 0}</div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <div className="text-sm font-medium text-slate-500 mb-1">Medium</div>
+                      <div className="text-2xl font-bold text-yellow-500">{currentSub.scan_result?.medium_count || 0}</div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <div className="text-sm font-medium text-slate-500 mb-1">Low</div>
+                      <div className="text-2xl font-bold text-blue-500">{currentSub.scan_result?.low_count || 0}</div>
+                    </div>
+                 </div>
+
+                 <div className="bg-white p-6 rounded-lg border border-slate-200">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 mb-4 text-slate-800">
+                      <Lightbulb className="h-5 w-5 text-yellow-500" /> Remediation Steps
+                    </h3>
+                    <ul className="space-y-3">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-500 mt-1" />
+                        <span className="text-sm text-slate-600">Review the vulnerability findings and patch the affected packages before re-deploying.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-500 mt-1" />
+                        <span className="text-sm text-slate-600">If scanning standard images like &apos;nginx:latest&apos;, consider using a minimal or distroless version like &apos;nginx:alpine&apos; which usually contains fewer vulnerabilities.</span>
+                      </li>
+                    </ul>
+                 </div>
+                 
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

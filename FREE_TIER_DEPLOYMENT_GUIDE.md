@@ -35,9 +35,7 @@ For GitHub Actions to work, your code must be in a GitHub repository.
 3. Connect your GitHub account and select your `ContiSent` repository.
 4. Configure the service:
    - **Root Directory**: `backend`
-   - **Environment**: `Python 3`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port 10000`
+   - **Environment**: `Docker`
    - **Instance Type**: Free
 5. Scroll down to **Environment Variables** and add:
    - `DATABASE_URL` = [Your Supabase Connection String]
@@ -65,7 +63,27 @@ For GitHub Actions to work, your code must be in a GitHub repository.
 2. Go to the **Environment** tab.
 3. Add the `ALLOWED_ORIGINS` variable:
    - `ALLOWED_ORIGINS` = `https://contisent-dashboard.vercel.app` *(replace with your actual Vercel URL)*
-4. Save the changes.
+6. Click **Save Changes**.
+   
+---
+
+### Step 6 (Optional): Real-World Email Setup
+If you want the application to actually send OTPs and Password Reset emails to users in the real world, you need an SMTP server. The easiest free way is using a Gmail App Password:
+
+1. Go to your **Google Account settings** -> **Security**.
+2. Enable **2-Step Verification** (if not already on).
+3. Search for **App Passwords** in the Google Security settings.
+4. Create a new App Password (name it "ContiSent Render"). It will give you a 16-letter code.
+5. Go back to your **Render Dashboard** -> **Environment**.
+6. Add the following variables:
+   - `SMTP_HOST` = `smtp.gmail.com`
+   - `SMTP_PORT` = `587`
+   - `SMTP_USER` = `your-gmail@gmail.com`
+   - `SMTP_PASSWORD` = `[your-16-letter-app-password]` (No spaces)
+   - `EMAILS_FROM_EMAIL` = `your-gmail@gmail.com`
+7. Save changes. The backend will now send real emails!
+
+---
 
 ### You are done! 🎉
 When someone submits a request on your Vercel frontend, your Render backend receives it and stores it in Supabase. The backend can then easily trigger the GitHub Actions pipeline, which spins up a free runner, builds Docker, runs Trivy, tests it on Kubernetes (`kind`), and sends the results back!

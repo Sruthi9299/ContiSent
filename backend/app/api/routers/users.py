@@ -25,7 +25,9 @@ def get_sessions(
             "id": s.id,
             "created_at": s.created_at,
             "expires_at": s.expires_at,
-            "is_revoked": s.is_revoked
+            "is_revoked": s.is_revoked,
+            "ip_address": s.ip_address,
+            "device_info": s.device_info
         }
         for s in sessions
     ]

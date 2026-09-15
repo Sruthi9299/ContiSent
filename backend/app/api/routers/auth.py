@@ -1,8 +1,9 @@
 from datetime import timedelta, datetime, timezone
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from app.models.domain import Session as SessionModel, AuditLog
 import secrets
 import logging
 
@@ -24,7 +25,7 @@ router = APIRouter()
 
 @router.post("/login/access-token", response_model=Token)
 def login_access_token(
-    db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
+    request: Request, db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
     OAuth2 compatible token login, get an access token for future requests
@@ -38,10 +39,36 @@ def login_access_token(
         raise HTTPException(status_code=400, detail="Inactive user")
     
     access_token_expires = timedelta(minutes=config.settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = security.create_access_token(
+        user.id, expires_delta=access_token_expires
+    )
+    
+    # Extract IP and User-Agent
+    ip_address = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    # Record Session
+    new_session = SessionModel(
+        user_id=user.id,
+        token=token,
+        ip_address=ip_address,
+        device_info=user_agent,
+        expires_at=datetime.now(timezone.utc) + access_token_expires
+    )
+    db.add(new_session)
+    
+    # Record AuditLog
+    audit_log = AuditLog(
+        user_id=user.id,
+        action="LOGIN",
+        details="User logged in successfully.",
+        ip_address=ip_address
+    )
+    db.add(audit_log)
+    db.commit()
+
     return {
-        "access_token": security.create_access_token(
-            user.id, expires_delta=access_token_expires
-        ),
+        "access_token": token,
         "token_type": "bearer",
     }
 
